@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 
@@ -26,18 +27,19 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  Location _locationController = Location();
+  //Initialize Location
+  final Location _locationController = Location();
 
   final Completer<GoogleMapController> _mapController =
       Completer<GoogleMapController>();
-  static const _pGooglePlex = LatLng(37.4223, -122.0848);
-  static const _pApplePark = LatLng(37.3323, -122.0090);
+  static const _pGooglePlex = LatLng(37.7749, -122.4194);
+  static const _pApplePark = LatLng(37.3382, -121.8863);
   LatLng? currentP = null;
 
   @override
   void initState() {
     super.initState();
-    _getLocationUpdate();
+    _getLocationUpdate().then((_) => {_getPolylinePoints()});
   }
 
   @override
@@ -79,6 +81,9 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _cameraToPosition(LatLng pos) async {
     final GoogleMapController controller = await _mapController.future;
     CameraPosition _newCameraPositon = CameraPosition(target: pos, zoom: 13);
+    await controller.animateCamera(
+      CameraUpdate.newCameraPosition(_newCameraPositon),
+    );
   }
 
   Future<void> _getLocationUpdate() async {
@@ -100,7 +105,9 @@ class _MyHomePageState extends State<MyHomePage> {
       }
     }
 
-    _locationController.onLocationChanged.listen((LocationData currentLocation) {
+    _locationController.onLocationChanged.listen((
+      LocationData currentLocation,
+    ) {
       if (currentLocation.latitude != null &&
           currentLocation.longitude != null) {
         setState(() {
@@ -108,9 +115,39 @@ class _MyHomePageState extends State<MyHomePage> {
             currentLocation.latitude!,
             currentLocation.longitude!,
           );
-          print(currentP);
+          _cameraToPosition(currentP!);
         });
       }
     });
+  }
+
+  ///Legacy Direction API(Backward Compatibility
+
+  Future<List<LatLng>> _getPolylinePoints() async {
+    List<LatLng> polyLineCoordinates = [];
+
+    //Initialize PolylinePoints
+    PolylinePoints polylinePoints = PolylinePoints(
+      apiKey: "AIzaSyCgc1ztY-jjwuP33XzSFwh4NGXeiq1deTY",
+    );
+
+    //Get route using legacy Directions API
+    PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
+      request: PolylineRequest(
+        origin: PointLatLng(37.7749, -122.4194), //San Francisco
+        destination: PointLatLng(37.3382, -121.8863), //San Jose
+        mode: TravelMode.driving,
+      ),
+    );
+
+    if (result.points.isNotEmpty) {
+      //Convert to LatLng for Google Maps
+      result.points.forEach((PointLatLng point) {
+        polyLineCoordinates.add(LatLng(point.latitude, point.longitude));
+      });
+    } else {
+      print(result.errorMessage);
+    }
+    return polyLineCoordinates;
   }
 }
